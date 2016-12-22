@@ -1,0 +1,9 @@
+Version 0.1, Date 2016-01-07
+Initial public release
+
+Version 0.2, Date 2016-02-07
+Added port for LPC2148 (arm7tdmi)
+Fixed some bugs in mutex, semaphore and queue
+Added spinlock and spinsem implementations
+Added spinlock protected printf
+

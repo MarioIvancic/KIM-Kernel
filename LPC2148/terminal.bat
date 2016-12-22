@@ -1,0 +1,1 @@
+lpc21isp-v1.83 -termonly com1 57600 12000

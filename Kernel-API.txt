@@ -1,0 +1,742 @@
+This document describes  kernel API for kernel version 0.3
+
+Kernel data types and internal functions
+
+In kernel_arch.h we define two atomic integer data types.
+typedef int atomic_t;
+typedef unsigned int uatomic_t;
+It's directly related to CPU word.
+
+
+INTERNAL KERNEL FUNCTIONS
+
+    atomic_t kernel_arch_init(unsigned ticks_for_interrupt);
+
+This is CPU/platform specific init functions called from kernel_init() public 
+function.
+
+
+    atomic_t kernel_arch_start(void);
+
+This is CPU/platform specific kernel start functions called from kernel_start()
+public function.
+
+
+    void kernel_arch_init_task_stack(TCB_t* tcb, void* fcn, void* arg);
+
+This is CPU/platform specific function for task stack initialization. Called 
+from task_create() public function.
+
+
+    void kernel_tick_proc(void);
+
+This is kernel timer tick handler. It is responsible for all sleep operations,
+task quota checking and semaphore/mutex/queue timeout operations. It is called
+from timer ISR.
+
+
+    void kernel_context_switcher(void);
+
+This function is responsible for finding highest priority runnable task.
+
+
+    void kernel_block_task(klist_t* pend_queue, unsigned ticks);
+
+This is helper function for blocking current task on semaphore, mutex or queue.
+Used in sem_timedwait(), mutex_timedlock(), mq_timedreceive() and mq_timedsend().
+
+
+    void kernel_unblock_task(klist_t* pend_queue);
+
+This is helper function for unblocking current task on queue. Used in 
+mq_timedreceive() and mq_timedsend().
+
+
+
+
+
+PUBLIC CORE KERNEL API
+
+---------------------------
+API callable only from main
+---------------------------
+
+    atomic_t kernel_init(unsigned ticks_for_interrupt);
+    
+This function is for initialization of kernel framework. Must be called first,
+before other kernel functions, with interrupts disabled.
+
+
+    atomic_t kernel_start(void);
+
+This function will start kernel multitasking framework. Interrupts must be
+disabled and it will be enabled inside this function. It will return and code 
+below call to this function will become main idle task.
+
+
+-----------------------------------
+API callable from main or from task
+-----------------------------------
+
+    void kernel_enter_critical(atomic_t* state);
+    
+Enter critical section and disable other tasks to modify task table. On some 
+CPUs may disable some or all interrupts.
+
+
+    void kernel_exit_critical(atomic_t* state);
+    
+Exit critical section and enable other tasks to modify task table. On some
+CPUs may enable some or all interrupts.
+
+
+    void kernel_exit_critical_cs(atomic_t* state);
+    
+Run kernel_context_switcher() to find next task to run. Then exit critical
+section and enable other tasks to modify task table. On some CPUs may enable 
+some or all interrupts.
+
+
+    TCB_t* task_get_handle(void);
+
+Get current task handle (pointer to TCB_t struct). Returns kernel_current_task.
+
+
+    unsigned kernel_get_ticks(void);
+    
+Get current tick count. Kernel tick counter counts kernel tick interrupts and
+it is used as main time source in kernel. All timing is based on it. On some
+CPUs reading kernel tick counter is not atomic and interrupts may be disabled
+for a short time.
+    
+    
+    unsigned kernel_get_elapsed_ticks(unsigned start_time);
+
+Get elapsed time in kernel ticks. On some CPUs reading kernel tick counter is 
+not atomic and interrupts may be disabled for a short time.
+
+
+    unsigned kernel_get_hsticks(void);
+    
+Get current high speed tick count. Kernel high speed tick counter is usually
+hardware timer. On some CPUs reading kernel high speed tick counter is not 
+atomic and interrupts may be disabled for a short time.
+
+
+    unsigned kernel_get_elapsed_hsticks(unsigned start_time);
+    
+Get elapsed time in kernel high speed ticks. On some CPUs reading kernel high
+speed tick counter is not atomic and interrupts may be disabled for a short 
+time.
+    
+    
+    atomic_t task_create(TCB_t* tcb, void* (*p)(void*), void* arg, void* stack_addr,
+                unsigned stack_size, task_prio_t prio, task_quota_t quota);
+
+Create new task with entry point p, argument arg, stack of size stack_size on
+memory block at address stack_addr, priority prio and time quota quota. The new
+task will be in TASK_READY state but it's run time will depend on other runable
+tasks. Caller task is not blocked.
+If quota is > 0 new task will be preempted at least every quota kernel ticks.
+If quota == 0 new task will not have time quota and will be preempted only on
+some blocking action such as task_usleep(), mutex_lock(), sem_wait().
+
+Note: main idle loop task will be implicitly created in kernel_start(). This
+implicitly created task will have lowest prioity 0 and no quota. Allso, it must
+not call any blocking function because this task must allways be in runnable
+state or strange things will happen.
+
+
+
+---------------------------
+API callable from task only
+---------------------------
+
+
+    void task_usleep(unsigned ticks);
+
+Sleep number of kernel ticks. Calling task will be blocked for ticks kernel
+ticks. After that it will be placed in runnable state but there is no guarantee
+that it will execute immediately because other higher priority tasks may be in
+runnable state.
+
+
+    void task_yield(void);
+    
+This function will give CPU to some other task on the same or higher priority
+level. Calling task will be moved to the end of queue or runnable tasks with
+the same priority. If calling task is currently highest priority task in 
+runnable state and the only task on its priority level it will be run again.
+
+
+    void task_kill(volatile TCB_t* task);
+    
+Kill task of same or lower priority. If task == 0 current (calling) task is 
+killed (which is equivalent to caling task_exit()). After call to this function
+all resources of killed task can be reused (like memory, etc.)
+Note: that main idle loop can't be killed.
+Note: if task was in blocked state waiting on some resource it will be removed
+from wait queue for that resource (mutex, semaphore, queue).
+
+
+    void task_exit(void);
+
+Exit from current task and destroy current task (equivalent to task_kill(0)).
+Task should not normally return but if it does it may call task_exit() before
+return to explicitlly terminate task. If it just returns without calling 
+task_exit() directly this function will be called indirectly becouse task_exit
+is return point for every task (except for main idle loop). After call to this
+function all resources of task can be reused (like memory, etc.)
+
+
+
+
+
+PUBLIC API OF KERNEL EXTENSIONS
+
+
+SPINLOCK API
+
+
+    void kspinlock_init(atomic_t *lock);
+
+This function will initialize spinlock to unlocked state.
+
+
+    atomic_t kspinlock_trylock(atomic_t *lock);
+
+Function kspinlock_trylock() will try to lock a spinlock *lock. If lock is
+successful return value is 0. If spinlock is already locked return value is 1.
+On some CPUs kspinlock_trylock() may disable some or all interrupts for short
+time. Function kspinlock_trylock() can be used in ISR.
+
+
+    void kspinlock_unlock(atomic_t* lock);
+
+Function kspinlock_unlock() will unlock spinlock *lock. On some CPUs 
+kspinlock_unlock() may disable some or all interrupts for short time.
+Function kspinlock_unlock() can be used in ISR.
+
+
+    void kspinlock_lock(atomic_t *lock);
+
+Function kspinlock_lock() will lock spinlock. If lock is already locked before
+call to this function task_yield() function will be called in a loop until lock
+is successfuly locked.
+
+
+    atomic_t kspinlock_timedlock(atomic_t *lock, unsigned spin_count);
+
+Function kspinlock_timedlock() will try to lock a spinlock lock. If successful 
+it will return 0. If spinlock is already locked it will call task_yield() in a
+loop up to spin_count times and every time try to lock a spinlock. 
+It tries at most spin_count times to lock spinlock. If lock failed all 
+spin_count times return value is 1. If locl is successful return value is 0.
+The maximum timeout value will be for spin_count = 0 (MAX_UINT times).
+
+
+
+SPINSEM API
+
+Spinsem is lighweight semaphore. It will never block but in case if it can't
+progress it will call task_yield and try again later.
+Ssome CPUs don't have support for atomic spinsem operations. On such platforms
+spinlock is used to guard access to semaphore value.
+
+Spinsem is defined as spinsem_t data type as:
+
+typedef unsigned spinsem_t;
+
+or as
+
+typedef struct spinsem
+{
+	atomic_t lock;
+	unsigned value;
+} spinsem_t;
+
+depending on CPU spinsem support.
+
+
+    void kspinsem_init(spinsem_t *sem);
+
+Function kspinsem_init() will initialize spinsem sem to value 0.
+
+
+    unsigned kspinsem_value(spinsem_t *sem);
+
+Function kspinsem_value() returns the value of the spinsem sem without
+affecting the state of the semaphore. The value represents an actual semaphore
+value that occurred at some unspecified time during the call to 
+kspinsem_value(), but may not be the actual value of the semaphore when 
+kspinsem_value() is returned to the caller. The value returned may be zero or 
+positive. If returned value is zero, there may be other tasks waiting for the 
+semaphore; if returned value is positive, no one is waiting.
+Function kspinsem_value() can be used in ISR.
+
+
+    int kspinsem_trydec(spinsem_t *sem);
+
+This function will try to decrement semaphore. Returns 0 for success, 1 if
+already 0. Function kspinsem_trydec() can be used in ISR.
+
+
+    void kspinsem_dec(spinsem_t *sem);
+
+This function will decrement semaphore, but if may wait calling task_yield() if
+spinsem is blocked (value = 0).
+
+
+    void kspinsem_inc(spinsem_t *sem);
+
+This function will increment semaphore sem.
+Function kspinsem_inc() can be used in ISR.
+
+
+    atomic_t kspinsem_timeddec(spinsem_t *sem, unsigned spin_counts);
+
+Function kspinsem_timeddec() will decrement semaphore sem. If semaphore is 
+blocked it tries spin_counts times calling task_yield() every time. Returns 0 
+if semaphore is sucessfuly decremented, returns 1 if timeout.
+
+
+
+KPRINTF API
+
+Kprintf is spinlock protected printf implementation based on 
+Kustaa Nyholm / SpareTimeLabs tfp_printf/tfp_format.
+
+    void init_kprintf(void* putp, void (*putf) (void*, char));
+
+Function init_kprintf() will initialize function and data pointers in kprintf
+module. Argument putf is pointer to function and argument putp is void* pointer
+that will be argument of putf() function. When printing to serial port or
+similar device putp is NULL and putf will point to some putchar()-like function.
+The formats supported by this implementation are: 'd' 'u' 'c' 's' 'x' 'X'.
+If the library is compiled with 'PRINTF_SUPPORT_LONG' defined then the long 
+specifier is also supported.
+
+    void kprintf(char *fmt, ...);
+
+This function prints to device selected using init_kprintf.
+
+
+    void ksprintf(char* s, char *fmt, ...);
+
+This function prints to string s. String s must be of sufficient lenght, if it
+is not behavior is undefined. Function ksprintf() can be used in ISR.
+
+
+    void kformat(void* putp, void (*putf) (void*, char), char *fmt, va_list va);
+
+Function kformat() is real workhorse of this implementation and it calls
+tfp_format() for formating and printing. It is intended to be used for
+implementation of other printing functions like kprintf().
+
+
+MUTEX API
+
+Mutex is defined as mutex_t data type:
+
+typedef struct mutex
+{
+    uatomic_t   value;
+    klist_t     pend_queue;
+    TCB_t*      owner;
+} mutex_t;
+
+
+    atomic_t mutex_init(mutex_t *mp);
+
+Intialize mutex to unlocked state. This must be the first operation on mutex.
+Function mutex_init() always returns 0.
+
+
+    atomic_t mutex_trylock(mutex_t *mp );
+
+Try to lock a mutex. If mutex is already locked returns -1. If successful it
+will temporarily boost tasks priority to KERNEL_MAX_PRIORITIES - 1 (highest
+priority) and return 0 but it will not switch context and it will not block.
+
+
+    atomic_t mutex_unlock(mutex_t *mp );
+
+This is mutext unlock function. If calling task is not the owner of the mutex 
+return value is -1 (error). If mutex is already unlocked 0 is returned without
+blocking and context switching. If mutex was locked before this call it will be
+unlocked, original task priority will be restored and return value will be 0. 
+If there is blocked tasks in mutex pending queue first task will be unblocked 
+and it will become new mutex owner. Unblocked task will have boosted priority 
+to highest so it will run before this function returns.
+
+
+    atomic_t mutex_timedlock(mutex_t *mp, unsigned ticks);
+
+This function will try to lock a mutex. If successful it will boost tasks 
+priority to highest and return 0. If mutex is already locked it will block
+for ticks kernel ticks or until mutex is sucessfuly locked. If mutex is 
+successfuly locked return value is 0. In case a timeout occurred return value
+is -1.
+
+
+    atomic_t mutex_lock(mutex_t *mp) { return mutex_timedlock(mp, 0); }
+
+This is mutext lock function. If successful it will boost tasks priority to
+highest and return 0. If mutex is already locked it will block calling task
+until mutex is sucessfuly locked, so it might block forever.
+If mutex is successfuly locked return value is 0.
+
+
+SEMAPHORE API
+
+
+Semaphore is defined as sem_t data type:
+
+typedef struct sem
+{
+    uatomic_t value;
+    uatomic_t maxval;
+    klist_t   pend_queue;
+} sem_t;
+
+
+    atomic_t sem_init(sem_t *sem, atomic_t pshared /* not used*/, uatomic_t value, uatomic_t maxval);
+
+Function sem_init() is used to initialize semaphore sem to value. Semaphore 
+limit is set to maxval. This semaphore may be used in subsequent calls to 
+sem_wait(), sem_trywait(), sem_timedwait() and sem_post(). In this 
+implementation parameter pshared is not used. sem_init() always returns 0.
+
+
+    atomic_t sem_init_binary(sem_t *sem, atomic_t psh /* not used*/, uatomic_t val);
+
+Function sem_init_binary() is used to initialize binary semaphore sem to value
+val (0 or 1). Semaphore limit is set to 1. This semaphore may be used in 
+subsequent calls to sem_wait(), sem_trywait(), sem_timedwait() and sem_post().
+In this implementation parameter pshared is not used.
+This function always returns 0.
+
+
+    atomic_t sem_trywait(sem_t *sem);
+
+Function sem_trywait() is a function by which a calling task tries to lock 
+counting or binary semaphore. A calling task will not be blocked regardless of
+the value of the semaphore it accesses. If at the time of a call to 
+sem_trywait(), the value of sem is positive, sem_trywait() decrement the value 
+of the semaphore and returns 0. If the semaphore's value is 0 sem_trywait()
+returns -1;
+    
+    
+    atomic_t sem_timedwait(sem_t *sem, unsigned ticks);
+
+If at the time of a call to sem_timedwait() the value of sem is positive, 
+sem_timedwait() decrements the value of the semaphore, return immediately,
+and allow the calling process to continue.
+If the semaphore's value is 0 sem_timedwait() will block the calling task until
+specified timeout expires or some other task increment semaphore value using 
+sem_post(). The timeout expires when the relative time specified by ticks 
+passes, as measured by the kernel tick clock on which timeouts are based. If 
+parameter ticks is 0 timeout time is infinite and sem_timedwait() will block 
+untill some task calls sem_post() on this semaphore. Function sem_timedwait() 
+returns 0 if the calling process successfully performed the semaphore lock 
+operation on the semaphore designated by sem. If timeout expires the 
+sem_timedwait() returns -1.
+
+
+    atomic_t sem_wait(sem_t *sem) { return sem_timedwait(sem, 0); }
+
+If at the time of a call to sem_wait() the value of sem is positive, sem_wait()
+decrements the value of the semaphore, return immediately, and allow the 
+calling process to continue. If the semaphore's value is 0 sem_wait() will 
+block the calling task until some other task increment semaphore value using
+sem_post(). Function sem_wait() always returns 0.
+
+
+    atomic_t sem_post(sem_t *sem );
+
+If, prior to the call to sem_post(), the value of sem was 0, and other tasks 
+were blocked waiting for the semaphore, then the task which has been waiting 
+the longest is unblocked. If, prior to the call to sem_post(), no other tasks
+were blocked for the semaphore, then its value is incremented by one but value
+is not allowed to be higher than limit maxval.
+Function sem_post() always returns 0.
+
+
+    atomic_t sem_getvalue(sem_t *sem, atomic_t *sval);
+
+Function sem_getvalue() reads the value of the semaphore sem without affecting
+the state of the semaphore. The value represents an actual semaphore value that
+occurred at some unspecified time during the call to sem_getvalue(), but may 
+not be the actual value of the semaphore when sem_getvalue() is returned to the
+caller. The value set in sval may be zero or positive. If *sval is zero, there 
+may be other tasks waiting for the semaphore; if *sval is positive, no one is 
+waiting. Function sem_getvalue() always returns 0.
+
+
+
+MESSAGE QUEUE API
+
+Message is defined as message_t data type:
+
+typedef union
+{
+    struct
+    {
+        union
+        {
+            void*   pa;
+            uint8_t sa[sizeof(void*)];
+        };
+        union
+        {
+            void*   pb;
+            uint8_t sb[sizeof(void*)];
+        };
+    };
+    uint8_t         byte[2 * sizeof(void*)];
+} message_t;
+
+A message can hold 2 pointers or 2*sizeof(void*) bytes.
+
+
+Message queue is defined as mqueue_t data type:
+
+typedef struct mqueue
+{
+    uatomic_t head;
+    uatomic_t tail;
+    uatomic_t mask;         // mask = size - 1;
+    message_t* q;           // array of message_t objects
+    klist_t   rd_pend_queue;
+    klist_t   wr_pend_queue;
+} mqueue_t;
+
+
+    atomic_t mq_init(mqueue_t* mq, message_t* q, int qsize);
+
+Function mq_init() will initialize message queue structure mq. Storage for
+message queue is message_t array q of size qsize. Argument qsize must be power
+of 2 or message queue operation are undefined.
+Function mq_init() always returns 0.
+
+
+    atomic_t mq_timedreceive(mqueue_t* mq, message_t *msg, unsigned ticks);
+
+Function mq_timedreceive() receives the oldest of messages from the message
+queue fifo mq. If the message queue mq is empty mq_timedreceive() blocks until
+a message is queued on the message queue or until the time interval specified 
+in ticks has elapsed. If more than one task is waiting to receive a message 
+when a message arrives at an empty queue, the task that has waited the longest
+receives the message. If parameter ticks is 0 timeout time is infinite and 
+mq_timedreceive() will block untill some task insert some message in this 
+message queue. Function mq_timedreceive() returns 0 on success, -1 on timeout.
+
+
+    atomic_t mq_receive(mqueue_t* mq, message_t *msg);
+
+Function mq_receive() receives the oldest of messages from the message queue
+fifo mq. If the message queue mq is empty mq_receive() blocks until a message
+is queued on the message queue. If more than one task is waiting to receive a 
+message when a message arrives at an empty queue, the task that has waited the
+longest receives the message. Function mq_receive() always returns 0.
+
+
+    atomic_t mq_timedsend(mqueue_t* mq, const message_t *msg, unsigned ticks);
+
+Function mq_timedsend() adds the message msg to the message queue mq. If the 
+specified message queue is not full, mq_timedsend() inserts message to fifo
+head. If the specified message queue is full mq_timedsend() blocks until space
+becomes available to enqueue the message or until the time interval specified 
+in ticks has elapsed. If more than one task is waiting to send when space 
+becomes available in the message queue, the task that has waited the longest 
+sends its message. If parameter ticks is 0 timeout time is infinite and 
+mq_timedsend() will block untill space becomes available in the message queue.
+Function mq_timedsend() returns 0 on success, -1 on timeout.
+
+
+    atomic_t mq_send(mqueue_t* mq, const message_t *msg);
+
+Function mq_send() adds the message msg to the message queue specified by mq.
+If the specified message queue is not full, mq_send() inserts message to fifo
+head. If the specified message queue is full mq_send() blocks until space 
+becomes available to enqueue the message. If more than one task is waiting to 
+send when space becomes available in the message queue, the task that has 
+waited the longest sends its message. Function mq_send() always returns 0.
+
+
+    atomic_t mq_tryreceive(mqueue_t* mq, message_t *msg);
+
+Function mq_tryreceive() receives the oldest of messages from the message
+queue fifo mq. If the message queue mq is empty mq_tryreceive() returns -1.
+Function mq_tryreceive() returns 0 on success and -1 if message queue is empty.
+
+
+    atomic_t mq_trysend(mqueue_t* mq, const message_t *msg);
+
+Function mq_trysend() adds the message msg to the message queue mq. If the 
+message queue is not full, mq_trysend() inserts message to fifo head. If the 
+message queue is full mq_trysend() returns -1.
+Function mq_trysend() returns 0 on success, -1 if message queue is full.
+
+
+
+
+
+CONFIGURATION OPTIONS
+
+Some kernel parameters can be defined in code or in Makefile. 
+These options are (and default values):
+
+KERNEL_MAX_PRIORITIES	4
+KERNEL_STACK_ALIGN		8
+KERNEL_SYSTICK_PRESCALLER	not defined
+
+Other options are specific for CPU.
+For LPC2148 (ARM7TDMI core) we have:
+
+KERNEL_TIMER_VIC_SLOT 	8
+KERNEL_TIMER_VIC_TYPE 	4
+KERNEL_TIMER_BASE_ADDR 	TMR0
+KERNEL_TIMER_PCLK_DIV 	3
+KERNEL_TIMER_MATCH_CH 	0
+
+Description
+
+Parameter KERNEL_MAX_PRIORITIES defines priority levels, from 0 to 
+KERNEL_MAX_PRIORITIES - 1. Lowest priority level is 0, highest priority level 
+is KERNEL_MAX_PRIORITIES - 1.
+
+Lowest priotity level (level 0) is used for main idle loop that will never
+block. If there is other tasks beside of main idle loop on lowest priority
+level then those tasks will share CPU time with main idle loop because main
+idle loop will never block.
+
+Hasks holding a mutex (owners of mutex) will temporarily have maximum priority
+level KERNEL_MAX_PRIORITIES - 1.
+
+Taking all this in consideration, it's recomended to reserve priority level 0
+and priority level KERNEL_MAX_PRIORITIES - 1 for this special purposes and for
+normal tasks use some priority levels from 1 to KERNEL_MAX_PRIORITIES - 2.
+
+Good default value for 2-4 tasks is 4.
+
+
+Parameter KERNEL_STACK_ALIGN is used to align stack pointer in task context.
+For ARM7TDMI and ARM Cortex-M3 good default value is 8.
+
+
+Parameter KERNEL_SYSTICK_PRESCALLER is used for debugging to slow down system
+tick rate. For production code it should not be defined. This parameter is not
+defined by default.
+
+
+Parameter KERNEL_TIMER_VIC_SLOT is used to define kernel timer ISR priority on
+some ARM7TDMI cores that have VIC PL190 or PL192 (LPC21xx, LPC22xx, LPC23xx,
+LPC24xx). For LPC2148 with PL190 available range is from 0 to 15 (0 have
+highest priority, 15 have lowest priority) and good default value is 8 which
+is in the middle of available range.
+
+
+Parameter KERNEL_TIMER_VIC_TYPE is used to define kernel timer ISR type on
+some ARM7TDMI cores that have VIC PL190 or PL192 (LPC21xx, LPC22xx, LPC23xx,
+LPC24xx). For LPC2148 with PL190 available range is 4 (for TIMER0), 5 (for 
+TIMER1) and 8 (for PWM0) and good default value is 4 (for TIMER0).
+
+
+Parameter KERNEL_TIMER_BASE_ADDR defines kernel timer base address on some 
+NXP ARM7TDMI cores (LPC21xx, LPC22xx, LPC23xx, LPC24xx). This parameter must
+be defined in line with KERNEL_TIMER_VIC_TYPE because both relate to the same
+timer. For LPC2148 possible values are TMR0, TMR1, PWM0.
+
+
+Parameter KERNEL_TIMER_PCLK_DIV is used to set PCLK timer prescaler divider on
+LPC2148 and similar NXP MCUs. TimerCLK = PCLK / KERNEL_TIMER_PCLK_DIV.
+For PCLK = 30 MHz good default value is 3 to give TimerCLK of 10 MHz.
+
+
+Parameter KERNEL_TIMER_MATCH_CH is used to define timer match channel on NXP
+ARM7TDMI MCUs like LPC2148. Possible values are 0, 1, 2 and 3. Good default
+value is 0.
+
+
+TYPICAL USAGE
+
+
+// main.c
+#include "kernel.h"
+
+// not implemented here
+extern void toggle_led(int led_id);
+extern void sys_init(void);
+
+
+// 500ms for tick rate of 50Hz
+#define TOGGLE_LED_TIME 10
+
+
+
+void * led1_toggler(void* p);
+void * led2_toggler(void* p);
+
+TCB_t task1_tcb;
+TCB_t task2_tcb;
+
+#define TASK_1_SS 1024
+
+#define TASK_2_SS 1024
+
+char task1_stack[TASK_1_SS];
+char task2_stack[TASK_2_SS];
+
+#define TASK1_PRIO 1
+#define TASK2_PRIO 1
+
+#define TASK1_QUOTA 0
+#define TASK2_QUOTA 0
+
+
+
+int main(void)
+{
+    sys_init();
+
+    kernel_init(CCLK / 50);         // 50Hz tick rate
+
+    task_create(&task1_tcb, led1_toggler, 0, task1_stack, TASK_1_SS, TASK1_PRIO, TASK1_QUOTA);
+    task_create(&task2_tcb, led2_toggler, 0, task2_stack, TASK_2_SS, TASK2_PRIO, TASK2_QUOTA);
+    
+    kernel_start();
+    
+    // we must never break this loop
+    while(1)
+    {
+		// optional, switch to low power mode
+		
+    	task_yield();
+    }
+
+	return 0;
+}
+
+
+void * led1_toggler(void* p)
+{
+    while(1)
+    {
+		toggle_led(1);
+		task_usleep(TOGGLE_LED_TIME);
+    }
+    return 0;
+}
+
+void * led2_toggler(void* p)
+{
+    while(1)
+    {
+		task_usleep(TOGGLE_LED_TIME);
+		toggle_led(2);
+    }
+    return 0;
+}
+
+

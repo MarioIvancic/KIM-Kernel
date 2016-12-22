@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="kernel" />
+		<Option makefile_is_custom="1" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/kernel" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
+				<Option object_output="obj/Debug/" />
+				<Option type="5" />
+				<Option compiler="gcc" />
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/kernel" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
+				<Option object_output="obj/Release/" />
+				<Option type="5" />
+				<Option compiler="gcc" />
+			</Target>
+		</Build>
+		<Unit filename="../kernel/arm7tdmi/arm7-tdmi-atomic.S" />
+		<Unit filename="../kernel/arm7tdmi/kernel_arch.h" />
+		<Unit filename="../kernel/arm7tdmi/kernel_arm7.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/arm7tdmi/kernel_arm7_asm.S" />
+		<Unit filename="../kernel/changelog.txt" />
+		<Unit filename="../kernel/kernel.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/kernel.h" />
+		<Unit filename="../kernel/klist.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/klist.h" />
+		<Unit filename="../kernel/kprintf.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/kprintf.h" />
+		<Unit filename="../kernel/kspinlock.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/kspinlock.h" />
+		<Unit filename="../kernel/kspinsem.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/kspinsem.h" />
+		<Unit filename="../kernel/mqueue.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/mqueue.h" />
+		<Unit filename="../kernel/mutex.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/mutex.h" />
+		<Unit filename="../kernel/printf.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/printf.h" />
+		<Unit filename="../kernel/semaphore.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/semaphore.h" />
+		<Unit filename="../kernel/spinlock.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/spinlock.h" />
+		<Unit filename="../kernel/spinsem.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../kernel/spinsem.h" />
+		<Unit filename="LPC2148-RAM.ld" />
+		<Unit filename="LPC2148-ROM.ld" />
+		<Unit filename="Makefile" />
+		<Unit filename="OlimexP2148-template.h" />
+		<Unit filename="appconfig.h" />
+		<Unit filename="arm7tdmi-crt0.S" />
+		<Unit filename="arm7tdmi_exception_handler.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="boardconfig.h" />
+		<Unit filename="crt0.h" />
+		<Unit filename="irq.S" />
+		<Unit filename="lpc-code-profile.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="lpc2148-crt0-eh.S" />
+		<Unit filename="lpc2148-crt0-os.S" />
+		<Unit filename="lpc21xx.h" />
+		<Unit filename="lpc_timer_time.h" />
+		<Unit filename="lpc_uart_bit_defines.h" />
+		<Unit filename="lpc_uart_magic.h" />
+		<Unit filename="lpcmcu.h" />
+		<Unit filename="main.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mcu_macros.h" />
+		<Unit filename="sys_init.h" />
+		<Unit filename="sys_init_lpc21xx.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="uart0.h" />
+		<Unit filename="uart0_polling.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

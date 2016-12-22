@@ -1,0 +1,56 @@
+// lpc_uart_magic.h
+
+#ifndef __UART_MAGIC_H__
+#define __UART_MAGIC_H__
+
+#include "lpc_uart_bit_defines.h"
+
+
+// UART
+// use the following macros to determine the 'baud' parameter values for *init()
+// CAUTION - 'baud' SHOULD ALWAYS BE A CONSTANT or a lot of code will be generated.
+#define UART_BAUD(baud) (unsigned short)((PCLK / ((baud) * 16.0)) + 0.5)
+
+// Definitions for typical UART 'baud' settings
+#define B1200         UART_BAUD(1200)
+#define B9600         UART_BAUD(9600)
+#define B19200        UART_BAUD(19200)
+#define B38400        UART_BAUD(38400)
+#define B57600        UART_BAUD(57600)
+#define B115200       UART_BAUD(115200)
+
+// Definitions for typical UART 'mode' settings
+#define UART_7N1      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_NO   + ULCR_STOP_1)
+#define UART_7O1      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_ODD   + ULCR_STOP_1)
+#define UART_7E1      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_EVEN + ULCR_STOP_1)
+#define UART_7M1      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_MARK  + ULCR_STOP_1)
+#define UART_7S1      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_SPACE + ULCR_STOP_1)
+
+#define UART_7N2      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_NO    + ULCR_STOP_2)
+#define UART_7O2      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_ODD   + ULCR_STOP_2)
+#define UART_7E2      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_EVEN + ULCR_STOP_2)
+#define UART_7M2      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_MARK  + ULCR_STOP_2)
+#define UART_7S2      (unsigned char)(ULCR_CHAR_7 + ULCR_PAR_SPACE + ULCR_STOP_2)
+
+#define UART_8N1      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_NO    + ULCR_STOP_1)
+#define UART_8O1      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_ODD  + ULCR_STOP_1)
+#define UART_8E1      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_EVEN  + ULCR_STOP_1)
+#define UART_8M1      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_MARK  + ULCR_STOP_1)
+#define UART_8S1      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_SPACE + ULCR_STOP_1)
+
+#define UART_8N2      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_NO    + ULCR_STOP_2)
+#define UART_8O2      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_ODD  + ULCR_STOP_2)
+#define UART_8E2      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_EVEN  + ULCR_STOP_2)
+#define UART_8M2      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_MARK  + ULCR_STOP_2)
+#define UART_8S2      (unsigned char)(ULCR_CHAR_8 + ULCR_PAR_SPACE  + ULCR_STOP_2)
+
+
+
+// Definitions for typical UART 'fmode' settings
+#define UART_FIFO_OFF (0x00)
+#define UART_FIFO_1   (unsigned char)(UFCR_FIFO_ENABLE + UFCR_FIFO_TRIG1)
+#define UART_FIFO_4   (unsigned char)(UFCR_FIFO_ENABLE + UFCR_FIFO_TRIG4)
+#define UART_FIFO_8   (unsigned char)(UFCR_FIFO_ENABLE + UFCR_FIFO_TRIG8)
+#define UART_FIFO_14  (unsigned char)(UFCR_FIFO_ENABLE + UFCR_FIFO_TRIG14)
+
+#endif // __UART_MAGIC_H__
